@@ -230,19 +230,6 @@
             "format": "date-time",
             "nullable": true
           },
-          "stages": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ApprovalStage"
-            }
-          },
-          "structure": {
-            "type": "array",
-            "description": "Workflow structure defining stage ordering and trigger dependencies.",
-            "items": {
-              "$ref": "#/components/schemas/ApprovalStructure"
-            }
-          },
           "isApprovalActive": {
             "type": "boolean",
             "description": "Computed flag that indicates whether the version being accessed is still the document's active (head) version. Compares the document's `currentVersionID` against the `assetId` of the requested version: when they match, the version is current and `isApprovalActive` is `true`; when the document has been superseded by a newer upload, it is `false`."
