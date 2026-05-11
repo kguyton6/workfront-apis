@@ -3,7 +3,7 @@
   "info": {
     "title": "Unified Approvals Connector",
     "version": "1.0",
-    "description": "The Unified Approvals Connector is the HTTP API for managing approvals on Workfront document versions. Use it to create approvals, build multi-stage workflows with conditional stage triggers, add and remind participants, record decisions, manage reusable approval templates, search across every approval the requesting user can see, and retrieve AI brand-review results captured by bot reviewers on a stage.\n\n## Authentication\n\nThe connector supports one authentication method:\n\n| Method | Header/Cookie | Use case |\n|--------|--------------|----------|\n| **Bearer** | `Authorization: Bearer <token>` | IMS Bearer token from Adobe IO / Developer Console |\n\nAll endpoints accept Bearer token auth.\n\nFor Bearer token auth, the following Workfront context headers are also required:\n- `x-api-key` \u2014 `client_id` of the technical account generated from the Adobe Developer Console (identifies the calling integration to the API gateway)\n- `x-gw-subdomain` \u2014 Workfront customer subdomain\n- `wf-customerid` \u2014 Workfront customer ID\n- `wf-userid` \u2014 Workfront user ID\n- `wf-lane` \u2014 Workfront deployment lane (e.g. `prod`, `preview`, `devtest`)\n\n## Asset Types\n\nEndpoints currently only support `DOCV` (Workfront document version) as the `assetType` path parameter.\n\n\n## Base URL\n\n`https://workfront.adobe.io/workfront-approvals/`\n\n## Endpoint Groups\n\n| Tag | Base path | Auth |\n|-----|-----------|------|\n| Approvals | `/api/v1/approvals` | Complex |\n| Templates | `/api/v1/templates` | Complex |",
+    "description": "The Unified Approvals Connector is the HTTP API for managing approvals on Workfront document versions. Use it to create approvals, build multi-stage workflows with conditional stage triggers, add and remind participants, record decisions, manage reusable approval templates, search across every approval the requesting user can see, and retrieve AI brand-review results captured by bot reviewers on a stage.\n\n## Authentication\n\nThe connector supports one authentication method:\n\n| Method | Header/Cookie | Use case |\n|--------|--------------|----------|\n| **Bearer** | `Authorization: Bearer <token>` | IMS Bearer token from Adobe IO / Developer Console |\n\nAll endpoints accept Bearer token auth.\n\nFor Bearer token auth, the following Workfront context headers are also required:\n- `x-api-key` \u2014 `client_id` of the technical account generated from the Adobe Developer Console (identifies the calling integration to the API gateway)\n- `x-gw-subdomain` \u2014 Workfront customer subdomain\n- `wf-customerid` \u2014 Workfront customer ID\n- `wf-userid` \u2014 Workfront user ID\n- `wf-lane` \u2014 Workfront deployment lane (e.g. `prod`, `preview`, `devtest`)\n\n## Asset Types\n\nEndpoints currently only support `DOCV` (Workfront document version) as the `assetType` path parameter.\n\n\n## Base URL\n\n`https://workfront.adobe.io/workfront-approvals/`\n\n## Endpoint Groups\n\n| Tag | Base path | Auth |\n|-----|-----------|------|\n| Approvals | `/api/v1/approvals` | Complex |\n| Templates | `/api/v1/templates` | Complex |\n| Grouped Approvals | `/api/v1/grouped-approvals` | Complex |",
     "contact": {
       "name": "",
       "email": "",
@@ -44,6 +44,10 @@
     {
       "name": "Bot Reviews",
       "description": "AI brand review results from the Bot Registry"
+    },
+    {
+      "name": "Grouped Approvals",
+      "description": "Approval workflows that span multiple assets simultaneously. A grouped approval has its own stage structure, participants, and decisions \u2014 independent of any individual asset approval."
     }
   ],
   "components": {
@@ -1732,6 +1736,282 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/BotReviewValidationResult"
             }
+          }
+        }
+      },
+      "GroupedApprovalReference": {
+        "type": "object",
+        "description": "External reference that identifies a participant or asset in a foreign system (e.g. Workfront, Frame.io).",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID of the entity in the referenced system"
+          },
+          "type": {
+            "type": "string",
+            "description": "System or entity type identifier (e.g. `DOCV`)"
+          }
+        }
+      },
+      "GroupedApprovalParticipant": {
+        "type": "object",
+        "description": "A participant (user or team) in a grouped approval or one of its stages.",
+        "properties": {
+          "guid": {
+            "type": "string",
+            "description": "Participant GUID in the approvals system"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "USER",
+              "TEAMOB"
+            ],
+            "description": "Participant type \u2014 `USER` for an individual, `TEAMOB` for a Workfront team."
+          },
+          "references": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupedApprovalReference"
+            },
+            "description": "External references linking this participant to identities in other systems"
+          },
+          "role": {
+            "type": "string",
+            "description": "Participant's role on the stage (`approver` or `reviewer`). Present on stage participants only."
+          },
+          "decisionCounts": {
+            "type": "object",
+            "description": "Aggregate decision counts. Present on stage participants only.",
+            "properties": {
+              "decided": {
+                "type": "integer",
+                "description": "Number of decisions made"
+              },
+              "undecided": {
+                "type": "integer",
+                "description": "Number of decisions still pending"
+              }
+            }
+          }
+        }
+      },
+      "GroupedApprovalAsset": {
+        "type": "object",
+        "description": "An asset included in a grouped approval.",
+        "properties": {
+          "guid": {
+            "type": "string",
+            "description": "Asset GUID in the approvals system"
+          },
+          "references": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupedApprovalReference"
+            },
+            "description": "External references linking this asset to records in other systems (e.g. a Workfront DOCV ID)"
+          },
+          "decision": {
+            "type": "string",
+            "nullable": true,
+            "description": "Aggregated decision for this asset across all stages, or `null` if no decision has been reached"
+          }
+        }
+      },
+      "GroupedApprovalStage": {
+        "type": "object",
+        "description": "A stage within a grouped approval.",
+        "properties": {
+          "stageId": {
+            "type": "string",
+            "description": "Unique identifier for the stage"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the stage"
+          },
+          "status": {
+            "type": "string",
+            "description": "Current status of the stage (e.g. `active`, `completed`, `pending`)"
+          },
+          "decision": {
+            "type": "string",
+            "nullable": true,
+            "description": "Overall decision for the stage, or `null` if undecided"
+          },
+          "isLocked": {
+            "type": "boolean",
+            "description": "Whether the stage is locked and no further decisions can be recorded"
+          },
+          "deadlineDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 deadline for the stage"
+          },
+          "decisionCounts": {
+            "type": "object",
+            "properties": {
+              "decided": {
+                "type": "integer",
+                "description": "Number of participants who have decided"
+              },
+              "undecided": {
+                "type": "integer",
+                "description": "Number of participants yet to decide"
+              }
+            }
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupedApprovalParticipant"
+            },
+            "description": "Participants assigned to this stage"
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Arbitrary stage-level metadata (e.g. `reviewLink`, `reviewLinkStatus`)",
+            "additionalProperties": true
+          }
+        }
+      },
+      "GroupedApproval": {
+        "type": "object",
+        "description": "A grouped approval \u2014 a single approval workflow that spans multiple assets simultaneously.",
+        "properties": {
+          "guid": {
+            "type": "string",
+            "description": "Unique GUID for the grouped approval"
+          },
+          "imsOrgId": {
+            "type": "string",
+            "description": "Adobe IMS Org that owns this grouped approval"
+          },
+          "customerId": {
+            "type": "string",
+            "description": "Workfront customer ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the grouped approval"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 creation timestamp"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 last-updated timestamp"
+          },
+          "creator": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GroupedApprovalParticipant"
+              }
+            ],
+            "description": "The participant who created the grouped approval"
+          },
+          "assets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupedApprovalAsset"
+            },
+            "description": "Assets included in this grouped approval"
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupedApprovalStage"
+            },
+            "description": "Stages in this grouped approval"
+          },
+          "structure": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApprovalStructure"
+            },
+            "description": "Stage dependency graph \u2014 each node references a stage and defines its parent stages and activation triggers"
+          }
+        }
+      },
+      "GroupedApprovalSearchItem": {
+        "type": "object",
+        "description": "A single row returned by the grouped approvals search for the `awaitingApprovals` view.",
+        "properties": {
+          "guid": {
+            "type": "string",
+            "description": "Grouped approval GUID"
+          },
+          "imsOrgId": {
+            "type": "string",
+            "description": "Adobe IMS Org ID"
+          },
+          "customerId": {
+            "type": "string",
+            "description": "Workfront customer ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "creator": {
+            "$ref": "#/components/schemas/GroupedApprovalParticipant"
+          },
+          "stages": {
+            "type": "array",
+            "description": "Stages where the requesting user is a participant with a pending decision",
+            "items": {
+              "type": "object",
+              "properties": {
+                "stageId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "deadlineDate": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "participant": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/GroupedApprovalParticipant"
+                    }
+                  ],
+                  "description": "The calling user's participant record on this stage, including their decision counts and status"
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "Stage metadata (e.g. `reviewLink`, `reviewLinkStatus`)"
+                }
+              }
+            }
+          }
+        }
+      },
+      "GroupedApprovalSearchResult": {
+        "type": "object",
+        "description": "Paginated search result for grouped approvals.",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupedApprovalSearchItem"
+            },
+            "description": "Page of results shaped by the requested `view`"
+          },
+          "cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Opaque cursor for the next page. Pass this value as `cursor` in the next request. `null` when there are no more results."
           }
         }
       }
@@ -3799,6 +4079,506 @@
           },
           "401": {
             "$ref": "#/components/responses/UnauthorizedResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/grouped-approvals/{groupGuid}": {
+      "get": {
+        "tags": [
+          "Grouped Approvals"
+        ],
+        "summary": "Get grouped approval",
+        "description": "Fetches the full state of a grouped approval by its GUID, including all assets, stages, participants, structure, and decisions.",
+        "operationId": "getGroupedApproval",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "groupGuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "GUID of the grouped approval"
+          },
+          {
+            "name": "x-request-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique identifier for request tracing. Auto-generated if not provided."
+          },
+          {
+            "name": "x-correlation-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Unique identifier for correlation across multiple service calls. Auto-generated if not provided."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupedApproval"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerErrorResponse"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Grouped Approvals"
+        ],
+        "summary": "Delete grouped approval",
+        "description": "Permanently deletes a grouped approval by its GUID.",
+        "operationId": "deleteGroupedApproval",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "groupGuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "GUID of the grouped approval"
+          },
+          {
+            "name": "x-request-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique identifier for request tracing. Auto-generated if not provided."
+          },
+          {
+            "name": "x-correlation-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Unique identifier for correlation across multiple service calls. Auto-generated if not provided."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted \u2014 no content"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/grouped-approvals": {
+      "post": {
+        "tags": [
+          "Grouped Approvals"
+        ],
+        "summary": "Create grouped approval",
+        "description": "Creates a new grouped approval. Participants and assets may be identified by GUID, by external reference objects, or a mix of both. The stage trigger schema is intentionally permissive \u2014 enum constraints on `type` and `when` are not enforced at the connector layer to avoid blocking callers when new trigger types are added upstream.",
+        "operationId": "createGroupedApproval",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-request-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique identifier for request tracing. Auto-generated if not provided."
+          },
+          {
+            "name": "x-correlation-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Unique identifier for correlation across multiple service calls. Auto-generated if not provided."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "imsOrgId",
+                  "assets",
+                  "stages",
+                  "structure",
+                  "creator"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Display name for the grouped approval"
+                  },
+                  "imsOrgId": {
+                    "type": "string",
+                    "description": "Adobe IMS Org that owns this grouped approval"
+                  },
+                  "customerId": {
+                    "type": "string",
+                    "description": "Workfront customer ID"
+                  },
+                  "creator": {
+                    "type": "object",
+                    "required": [
+                      "type"
+                    ],
+                    "description": "The participant creating the grouped approval",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "description": "Participant type (e.g. `USER`)"
+                      },
+                      "guid": {
+                        "type": "string",
+                        "description": "Participant GUID"
+                      },
+                      "references": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/GroupedApprovalReference"
+                        }
+                      }
+                    }
+                  },
+                  "assets": {
+                    "type": "array",
+                    "minItems": 1,
+                    "description": "Assets to include in the grouped approval",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "guid": {
+                          "type": "string",
+                          "description": "Asset GUID"
+                        },
+                        "references": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/GroupedApprovalReference"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "stages": {
+                    "type": "array",
+                    "minItems": 1,
+                    "description": "Stages to create on the grouped approval",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "stageId",
+                        "participants"
+                      ],
+                      "properties": {
+                        "stageId": {
+                          "type": "string",
+                          "description": "Unique identifier for this stage"
+                        },
+                        "name": {
+                          "type": "string",
+                          "description": "Display name for the stage"
+                        },
+                        "deadlineDate": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "ISO 8601 deadline"
+                        },
+                        "deadlineBusinessDays": {
+                          "type": "integer",
+                          "description": "Deadline expressed as business days from creation"
+                        },
+                        "deadlineTimeOfDay": {
+                          "type": "object",
+                          "description": "Time-of-day component for the deadline",
+                          "properties": {
+                            "hours": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 23
+                            },
+                            "minutes": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 59
+                            }
+                          }
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "additionalProperties": true,
+                          "description": "Arbitrary stage metadata"
+                        },
+                        "participants": {
+                          "type": "array",
+                          "minItems": 1,
+                          "description": "Participants to assign to this stage",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "role"
+                            ],
+                            "properties": {
+                              "role": {
+                                "type": "string",
+                                "description": "Participant role (`approver` or `reviewer`)"
+                              },
+                              "guid": {
+                                "type": "string",
+                                "description": "Participant GUID"
+                              },
+                              "type": {
+                                "type": "string",
+                                "description": "Participant type (e.g. `USER`, `TEAMOB`)"
+                              },
+                              "references": {
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/components/schemas/GroupedApprovalReference"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "structure": {
+                    "type": "array",
+                    "minItems": 1,
+                    "description": "Stage dependency graph. Each node references a stage ID and defines its parent stages and activation triggers.",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "stageId",
+                        "parentIds",
+                        "triggers"
+                      ],
+                      "properties": {
+                        "stageId": {
+                          "type": "string",
+                          "description": "Must match a `stageId` in `stages`"
+                        },
+                        "parentIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "IDs of stages that must complete before this stage activates"
+                        },
+                        "triggers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "type",
+                              "when"
+                            ],
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "description": "Trigger action type (e.g. `activation`)"
+                              },
+                              "when": {
+                                "type": "string",
+                                "description": "Activation condition (e.g. `onCreate`, `onStagesComplete`)"
+                              },
+                              "parameters": {
+                                "type": "object",
+                                "additionalProperties": true,
+                                "description": "Trigger-specific parameters"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupedApproval"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/v1/grouped-approvals/search": {
+      "post": {
+        "tags": [
+          "Grouped Approvals"
+        ],
+        "summary": "Search grouped approvals",
+        "description": "Paginated search of grouped approvals filtered by view. The only supported view is `awaitingApprovals`, which returns approvals where the calling user has a pending decision. Supports cursor-based pagination \u2014 pass the `cursor` from a previous response to advance to the next page. When a non-null `cursor` is supplied, `limit` is ignored (the page size is encoded in the cursor).",
+        "operationId": "searchGroupedApprovals",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-request-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique identifier for request tracing. Auto-generated if not provided."
+          },
+          {
+            "name": "x-correlation-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Unique identifier for correlation across multiple service calls. Auto-generated if not provided."
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "view": {
+                    "type": "string",
+                    "enum": [
+                      "awaitingApprovals"
+                    ],
+                    "default": "awaitingApprovals",
+                    "description": "View format for results. Currently only `awaitingApprovals` is supported."
+                  },
+                  "teamIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Filter to grouped approvals that include these team IDs as `TEAMOB` participants"
+                  },
+                  "cursor": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "description": "Opaque pagination cursor from a prior response. An empty string is invalid. When non-null, `limit` is ignored."
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "default": 20,
+                    "description": "Maximum number of results per page. Ignored when a non-null `cursor` is supplied."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupedApprovalSearchResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundResponse"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerErrorResponse"
